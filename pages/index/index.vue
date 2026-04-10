@@ -29,7 +29,7 @@
 		},
 		methods: {
 			createNativeButtons() {
-				// --- 1. 选剧页专享 (最底)：“▶解析”按钮 ---
+				// --- 1. 选剧页专享：“▶解析”按钮 ---
 				this.floatBtn = new plus.nativeObj.View('floatBtn', {
 					bottom: '80px', right: '20px', width: '60px', height: '60px'
 				});
@@ -39,6 +39,21 @@
 				setTimeout(() => {
 					const currentWebview = this.$scope.$getAppWebview().children()[0];
 					if (currentWebview && !this._hasBindParseListener) {
+						
+						// 🛡️【核武器级别：原生网络防火墙 (修复卡死版)】🛡️
+						// 模式改为 'allow'：系统会自动放行正则匹配上的“白名单”网址，不会再引发死循环。
+						// 只有不在白名单里的流氓广告网址，才会被系统按死！
+						currentWebview.overrideUrlLoading({
+							mode: 'allow',
+							// 白名单：爱奇艺、腾讯、优酷、我们用的两个解析站，以及纯视频后缀
+							match: '.*(iqiyi\\.com|qq\\.com|youku\\.com|xmflv\\.com|8090g\\.cn|\\.m3u8|\\.mp4).*'
+						}, (e) => {
+							// 只有被拦截的流氓网址（如你截图里的加藤视频，或者试图唤醒淘宝/京东的跳转）才会进到这里
+							console.log('🛡️ 防火墙已成功拦截恶意跳转: ', e.url);
+							// 留空即可，因为进到这里的请求已经被底层掐断了，网页绝对跳不过去！
+						});
+
+						// 监听解析命令
 						currentWebview.addEventListener('titleUpdate', (e) => {
 							if (e.title && e.title.startsWith('PARSE_URL:')) {
 								const payload = e.title.replace('PARSE_URL:', '').split('|||');
@@ -47,8 +62,7 @@
 								
 								currentWebview.evalJS("document.title = '正在跳转';");
 								this.saveHistory(videoTitle, finalUrl);
-								
-								// 【回归老接口】
+								// 这里使用的是你觉得最好用的老接口
 								currentWebview.loadURL('https://jx.xmflv.com/?url=' + finalUrl);
 							}
 						});
@@ -111,7 +125,7 @@
 					currentWebview.evalJS(injectScript);
 				});
 
-				// --- 2. 选剧页专享 (中)：“🌐平台”按钮 ---
+				// --- 2. 选剧页专享：“🌐平台”按钮 ---
 				this.platformBtn = new plus.nativeObj.View('platformBtn', {
 					bottom: '150px', right: '20px', width: '60px', height: '60px'
 				});
@@ -129,7 +143,7 @@
 					});
 				});
 
-				// --- 3. 选剧页专享 (最上)：“🕒历史”按钮 ---
+				// --- 3. 选剧页专享：“🕒历史”按钮 ---
 				this.historyBtn = new plus.nativeObj.View('historyBtn', {
 					bottom: '220px', right: '20px', width: '60px', height: '60px'
 				});
@@ -168,14 +182,13 @@
 								let selectedItem = showList[e.index - 1];
 								const currentWebview = this.$scope.$getAppWebview().children()[0];
 								currentWebview.evalJS("document.title = '正在跳转';");
-								// 【回归老接口】
 								currentWebview.loadURL('https://jx.xmflv.com/?url=' + selectedItem.url);
 							}
 						}
 					});
 				});
 
-				// --- 4. 播放页专享 (下)：“📺投屏”按钮 ---
+				// --- 4. 播放页专享：“📺投屏”按钮 ---
 				this.castBtn = new plus.nativeObj.View('castBtn', {
 					bottom: '80px', right: '20px', width: '60px', height: '60px'
 				});
@@ -185,7 +198,7 @@
 					this.startSniffingAndCast();
 				});
 
-				// --- 5. 播放页专享 (上)：“🔄全屏”按钮 ---
+				// --- 5. 播放页专享：“🔄全屏”按钮 ---
 				this.rotateBtn = new plus.nativeObj.View('rotateBtn', {
 					bottom: '150px', right: '20px', width: '60px', height: '60px'
 				});
@@ -213,14 +226,13 @@
 				uni.setStorage({ key: 'watch_history', data: this.historyList });
 			},
 
-			// 巡逻兵：管理按钮组的切换 + 恢复去广告物理外挂
+			// 巡逻兵：管理按钮、同时进行视觉大扫除
 			startUrlMonitor() {
 				this.urlMonitor = setInterval(() => {
 					const currentWebview = this.$scope.$getAppWebview().children()[0];
 					let currentUrl = currentWebview.getURL();
 					
 					if (currentUrl) {
-						// 【特征回归】
 						if (currentUrl.indexOf('jx.xmflv.com') !== -1) {
 							// 播放页
 							if (this.floatBtn) this.floatBtn.hide();
@@ -229,7 +241,7 @@
 							if (this.castBtn) this.castBtn.show();
 							if (this.rotateBtn) this.rotateBtn.show();
 							
-							// 🛡️【恢复去广告脚本】：专杀 xmflv 里的悬浮窗
+							// 🛡️【视觉扫雷器】：专门干掉右下角红点及各种大号悬浮窗
 							const killAdScript = `
 								(function() {
 									try {
@@ -237,13 +249,12 @@
 										for (var i = 0; i < elements.length; i++) {
 											var el = elements[i];
 											var style = window.getComputedStyle(el);
-											if ((style.position === 'fixed' || style.position === 'absolute') && parseInt(style.zIndex) > 99) {
-												if (el.id.indexOf('player') === -1 && el.className.indexOf('player') === -1 && el.id.indexOf('video') === -1) {
-													el.style.display = 'none !important';
-													el.style.opacity = '0';
-													el.style.pointerEvents = 'none';
-													el.innerHTML = ''; 
-												}
+											
+											// 狙击右下角那个阴险的小红点
+											if (style.position === 'fixed' && el.offsetWidth > 0 && el.offsetWidth < 60 && el.offsetHeight < 60) {
+												el.style.transform = 'translate(-9999px, -9999px) !important';
+												el.style.opacity = '0';
+												el.style.pointerEvents = 'none';
 											}
 										}
 									} catch(e) {}
@@ -276,7 +287,6 @@
 			startSniffingAndCast() {
 				const currentWebview = this.$scope.$getAppWebview().children()[0];
 				let currentUrl = currentWebview.getURL();
-				// 【投屏雷达特征回归】
 				if (!currentUrl || currentUrl.indexOf('jx.xmflv.com') === -1) return;
 
 				uni.showLoading({ title: '启动深度雷达...' });
